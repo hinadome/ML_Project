@@ -7,6 +7,8 @@ from typing import List
 from sklearn.preprocessing import MinMaxScaler
 from contextlib import asynccontextmanager
 
+COUNT_PER_INSTANCE=1000
+
 # --- 1. CONFIGURATION & MODEL LOADING ---
 # In a real scenario, these paths would point to your saved .joblib or .pth files
 MODELS = {
@@ -79,18 +81,38 @@ async def predict_scaling(data: PredictionRequest):
     # Convert input to DataFrame
     df = pd.DataFrame([item.model_dump() for item in data.history])
 
-    # Example logic for XGBoost prediction
-    # 1. Feature Engineering (similar to build_tree_features)
-    # 2. prediction = loaded_models["xgb"].predict(features)
     features = build_tree_features(df)
 
-    #prediction = loaded_models["gbr"].predict(features)
     prediction = loaded_models["xgb"].predict(features)
     predicted_request_count = prediction.mean() * 1.1 
     return {
         "model": "xgb",
         "predicted_request_count": float(predicted_request_count),
-        "recommended_instances": int(np.ceil(predicted_request_count / 100)) # e.g., 100 reqs per instance
+        "recommended_instances": int(np.ceil(predicted_request_count / COUNT_PER_INSTANCE)) # e.g., 100 reqs per instance
+    }
+
+@app.post("/predict-scaling-with-gbr")
+async def predict_scaling(data: PredictionRequest):
+    """
+    Receives recent logs and returns the predicted traffic for the next hour.
+    """
+    if "xgb" not in loaded_models:
+        raise HTTPException(status_code=500, detail="Model not loaded. Check server logs.")
+    
+    if len(data.history) < 24:
+        raise HTTPException(status_code=400, detail="Need at least 24 hours of history for prediction.")
+    
+    # Convert input to DataFrame
+    df = pd.DataFrame([item.model_dump() for item in data.history])
+
+    features = build_tree_features(df)
+
+    prediction = loaded_models["gbr"].predict(features)
+    predicted_request_count = prediction.mean() * 1.1 
+    return {
+        "model": "gbr",
+        "predicted_request_count": float(predicted_request_count),
+        "recommended_instances": int(np.ceil(predicted_request_count / COUNT_PER_INSTANCE)) # e.g., 100 reqs per instance
     }
 
 @app.post("/detect-anomalies")
