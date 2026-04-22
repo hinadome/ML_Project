@@ -6,10 +6,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
-COPY ./model/best_gbr.pkl ./model/best_gbr.pkl
-COPY ./model/best_xgb.pkl ./model/best_xgb.pkl
-COPY ./model/anomaly_model.pkl ./model/anomaly_model.pkl
+# COPY ./model/best_gbr.pkl ./model/best_gbr.pkl
+# COPY ./model/best_xgb.pkl ./model/best_xgb.pkl
+# COPY ./model/anomaly_model.pkl ./model/anomaly_model.pkl
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
