@@ -6,9 +6,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
-# COPY ./model/best_gbr.pkl ./model/best_gbr.pkl
-# COPY ./model/best_xgb.pkl ./model/best_xgb.pkl
-# COPY ./model/anomaly_model.pkl ./model/anomaly_model.pkl
+COPY ./model/best_gbr.pkl ./model/best_gbr.pkl
+COPY ./model/best_xgb.pkl ./model/best_xgb.pkl
+COPY ./model/anomaly_model.pkl ./model/anomaly_model.pkl
 
 EXPOSE 8080
 
