@@ -133,11 +133,11 @@ async def detect_anomalies(data:  PredictionRequest):
     features['anomaly_signal'] = loaded_models["anomaly"].predict(X_scaled)
     anomalies = features[features['anomaly_signal'] == -1]
     anomalies_percentage = len(anomalies)/len(features)
-    anom = anomalies['request_count']
+    
     return {
         "total_processed": len(df),
         "anomalies_percentage": round(anomalies_percentage,3), # Placeholder
-        "indices": anom.values.tolist()
+        "indices": anomalies.index.tolist()
     }
 
 # --- 4. RUNNING THE SERVICE ---
