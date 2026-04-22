@@ -32,13 +32,10 @@ name: 'Build and Deploy to Cloud Run'
 on:
   push:
     branches:
-      - '"main"'
+      - 'main'
 
 env:
-  PROJECT_ID: '' # TODO: update to your Google Cloud project ID
   REGION: 'us-west1' # TODO: update to your region
-  SERVICE: '' # TODO: update to your service name
-  WORKLOAD_IDENTITY_PROVIDER: '' # TODO: update to your workload identity provider
 
 jobs:
   deploy:
@@ -74,7 +71,7 @@ jobs:
 
       - name: 'Build and Push Container'
         run: |-
-          DOCKER_TAG="$${{ env.REGION }}-docker.pkg.dev/${{ secrets.PROJECT_ID }}/${{ secrets.SERVICE }}:${{ github.sha }}"
+          DOCKER_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.PROJECT_ID }}/${{ secrets.SERVICE }}:${{ github.sha }}"
           docker build --tag "${DOCKER_TAG}" .
           docker push "${DOCKER_TAG}"
       - name: 'Deploy to Cloud Run'
