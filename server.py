@@ -116,28 +116,28 @@ async def predict_scaling(data: PredictionRequest):
     }
 
 @app.post("/detect-anomalies")
-async def detect_anomalies(data: List[LogEntry]):
+async def detect_anomalies(data:  PredictionRequest):
     """
     Analyzes a batch of logs and returns indices of detected anomalies.
     """
     if "anomaly" not in loaded_models:
         raise HTTPException(status_code=500, detail="Anomaly model not loaded. Check server logs.")
     
-    df = pd.DataFrame([item.model_dump() for item in data])
+    df = pd.DataFrame([item.model_dump() for item in data.history])
 
     # Features for Isolation Forest
     features = df[['request_count', 'error_5xx', 'bytes_sum']]
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(features)
     
-    score = loaded_models["anomaly"].predict(features)
-    is_anomaly = 1 if score == -1 else 0
-    # -1 is anomaly, 1 is normal
-    
+    features['anomaly_signal'] = loaded_models["anomaly"].predict(X_scaled)
+    anomalies = features[features['anomaly_signal'] == -1]
+    anomalies_percentage = len(anomalies)/len(features)
+    anom = anomalies['request_count']
     return {
         "total_processed": len(df),
-        "anomalies_detected": is_anomaly, # Placeholder
-        "indices": []
+        "anomalies_percentage": round(anomalies_percentage,3), # Placeholder
+        "indices": anom.values.tolist()
     }
 
 # --- 4. RUNNING THE SERVICE ---
