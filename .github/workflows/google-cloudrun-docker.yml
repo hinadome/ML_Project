@@ -60,7 +60,7 @@ jobs:
           workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
           service_account: '${{ secrets.GCP_GITHUB_ACTION_SA }}'
 
-      # BEGIN - Docker auth and build
+      # BEGIN - Docker auth and build -
       #
       # If you already have a container image, you can omit these steps.
       - name: 'Docker Auth'
