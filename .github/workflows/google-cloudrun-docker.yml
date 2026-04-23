@@ -68,9 +68,9 @@ jobs:
 
       - name: 'Download file'
         run: |
-          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/anomaly_model.pkl ./model/'
-          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_gbr.pkl ./model/'
-          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_xgb.pkl ./model/'
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/anomaly_model.pkl ./'
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_gbr.pkl ./'
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_xgb.pkl ./'
 
       # BEGIN - Docker auth and build -
       #
