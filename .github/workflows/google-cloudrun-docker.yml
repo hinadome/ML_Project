@@ -63,6 +63,15 @@ jobs:
           workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
           service_account: '${{ secrets.GCP_GITHUB_ACTION_SA }}'
 
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v3'
+
+      - name: 'Download file'
+        run: |
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/anomaly_model.pkl ./model/'
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_gbr.pkl ./model/'
+          'gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_xgb.pkl ./model/'
+
       # BEGIN - Docker auth and build -
       #
       # If you already have a container image, you can omit these steps.
