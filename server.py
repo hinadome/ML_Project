@@ -6,7 +6,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List
 
-COUNT_PER_INSTNCE=1000
+COUNT_PER_INSTANCE=100000
+NORMAL_ADJUST_COUNT=10000
+ABNORMAL_ADJUST_COUNT=25000
 
 app = FastAPI(title="Proactive Traffic Scaler & Anomaly Detector")
 
@@ -72,8 +74,8 @@ async def predict_xgb(request: ScalingRequest):
         inference_df = engineer_features(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = xgb_model.predict(X_scaled)[0]
-        final_forecast = max(0, prediction + 50)
-        return {"model": "XGBoost", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTNCE))}
+        final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
+        return {"model": "XGBoost", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE))}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -83,8 +85,8 @@ async def predict_gbr(request: ScalingRequest):
         inference_df = engineer_features(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = gbr_model.predict(X_scaled)[0]
-        final_forecast = max(0, prediction + 50)
-        return {"model": "GBR", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTNCE))}
+        final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
+        return {"model": "GBR", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE))}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -100,13 +102,13 @@ async def predict_smart_xgb(request: ScalingRequest):
         prediction = xgb_model.predict(X_scaled)[0]
         
         # Logic: If anomaly is detected, we might scale more conservatively or flag a warning
-        final_forecast = prediction + (100 if is_anomaly else 50)
+        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
         
         return {
             "recommendation": "Check system health" if is_anomaly else "Normal scaling",
             "is_anomaly": is_anomaly,
             "forecast_next_hour": round(float(final_forecast), 2),
-            "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTNCE)),
+            "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
             "model_used": "XGBoost + IsolationForest"
         }
     except Exception as e:
@@ -121,13 +123,13 @@ async def predict_smart_gbr(request: ScalingRequest):
         X_scaled = scaler_x.transform(inference_df)
         prediction = gbr_model.predict(X_scaled)[0]
         
-        final_forecast = prediction + (100 if is_anomaly else 50)
+        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
         
         return {
             "recommendation": "Check system health" if is_anomaly else "Normal scaling",
             "is_anomaly": is_anomaly,
             "forecast_next_hour": round(float(final_forecast), 2),
-            "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTNCE)),
+            "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
             "model_used": "GBR + IsolationForest"
         }
     except Exception as e:
