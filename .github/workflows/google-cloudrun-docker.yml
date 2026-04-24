@@ -72,6 +72,7 @@ jobs:
           gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/anomaly_model.pkl ./model/
           gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_gbr.pkl ./model/
           gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/best_xgb.pkl ./model/
+          gcloud storage cp gs://${{ secrets.PROJECT_ID }}/model/scaler_x.pkl ./model/
 
       # BEGIN - Docker auth and build -
       #
