@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     xgboost
 
-COPY server.py .
+COPY src/server.py .
 COPY ./model/best_gbr.pkl ./model/best_gbr.pkl
 COPY ./model/best_xgb.pkl ./model/best_xgb.pkl
 COPY ./model/anomaly_model.pkl ./model/anomaly_model.pkl
