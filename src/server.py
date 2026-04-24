@@ -3,24 +3,14 @@ import pandas as pd
 import numpy as np
 import os
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from typing import List
+from schema import LogInstance, ScalingRequest, ScalingResponse, SmartScalingResponse, AnomalyDetectionResponse, HealthResponse
 
 COUNT_PER_INSTANCE=100000
 NORMAL_ADJUST_COUNT=10000
 ABNORMAL_ADJUST_COUNT=25000
 
 app = FastAPI(title="Proactive Traffic Scaler & Anomaly Detector")
-
-# --- SCHEMAS ---
-class LogInstance(BaseModel):
-    request_count: int = Field(..., ge=0)
-    error_5xx: int = Field(..., ge=0)
-    bytes_sum: int = Field(..., ge=0)
-    hour: int = Field(..., ge=0, le=23)
-
-class ScalingRequest(BaseModel):
-    history: List[LogInstance]
 
 # --- LOAD ARTIFACTS ---
 try:
@@ -67,8 +57,7 @@ def check_anomaly_internal(history: List[LogInstance]):
     return bool(signal[0] == -1), float(signal[0])
 
 # --- EXISTING ENDPOINTS ---
-
-@app.post("/predict-scaling_on_xgb")
+@app.post("/predict-scaling_on_xgb", response_model=ScalingResponse)
 async def predict_xgb(request: ScalingRequest):
     try:
         inference_df = engineer_features(request.history)
@@ -79,7 +68,7 @@ async def predict_xgb(request: ScalingRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/predict-scaling_on_gbr")
+@app.post("/predict-scaling_on_gbr", response_model=ScalingResponse)
 async def predict_gbr(request: ScalingRequest):
     try:
         inference_df = engineer_features(request.history)
@@ -92,7 +81,7 @@ async def predict_gbr(request: ScalingRequest):
 
 # --- NEW COMBINATION ENDPOINTS ---
 
-@app.post("/predict-scaling-smart-xgb")
+@app.post("/predict-scaling-smart-xgb", response_model=SmartScalingResponse)
 async def predict_smart_xgb(request: ScalingRequest):
     """Combines Anomaly Detection with XGBoost Scaling."""
     try:
@@ -114,7 +103,7 @@ async def predict_smart_xgb(request: ScalingRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/predict-scaling-smart-gbr")
+@app.post("/predict-scaling-smart-gbr", response_model=SmartScalingResponse)
 async def predict_smart_gbr(request: ScalingRequest):
     """Combines Anomaly Detection with GBR Scaling."""
     try:
@@ -135,7 +124,7 @@ async def predict_smart_gbr(request: ScalingRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/detect-anomalies")
+@app.post("/detect-anomalies", response_model=AnomalyDetectionResponse)
 async def detect_anomalies(request: ScalingRequest):
     try:
         df = pd.DataFrame([inst.model_dump() for inst in request.history])
@@ -161,8 +150,7 @@ async def detect_anomalies(request: ScalingRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Anomaly Detection Error: {str(e)}")
 
-
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health():
     return {"status": "healthy"}
 

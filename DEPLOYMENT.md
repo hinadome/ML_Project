@@ -1,7 +1,7 @@
 # Docker
 - Image Creation
   ```
-  docker build -t instances_prediction_model:v1 .
+  docker build -t instances_prediction_model:v1 .docker build -t instances_prediction_model:v1 .
   ```
 - Docker Instance
   ```
@@ -39,7 +39,7 @@
   {"request_count": 950, "error_5xx": 0, "bytes_sum": 410000, "hour": 20},
   {"request_count": 720, "error_5xx": 2, "bytes_sum": 300000, "hour": 21},
   {"request_count": 600, "error_5xx": 0, "bytes_sum": 240000, "hour": 22},
-  {"request_count": 520, "error_5xx": 1, "bytes_sum": 190000, "hour": 23}
+  {"request_count": 520, "error_5xx": 1, "bytes_sum": 190000, "hour": 23},
   {"request_count": 520, "error_5xx": 1, "bytes_sum": 190000, "hour": 0}
     ]
   }'
