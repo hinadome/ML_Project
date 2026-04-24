@@ -1,144 +1,166 @@
 import joblib
 import pandas as pd
 import numpy as np
+import os
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
-from sklearn.preprocessing import MinMaxScaler
-from contextlib import asynccontextmanager
 
-COUNT_PER_INSTANCE=1000
+app = FastAPI(title="Proactive Traffic Scaler & Anomaly Detector")
 
-# --- 1. CONFIGURATION & MODEL LOADING ---
-# In a real scenario, these paths would point to your saved .joblib or .pth files
-MODELS = {
-    "gbr": "./model/best_gbr.pkl",
-    "xgb": "./model/best_xgb.pkl",
-    "anomaly": "./model/anomaly_model.pkl"
-}
+# --- SCHEMAS ---
+class LogInstance(BaseModel):
+    request_count: int = Field(..., ge=0)
+    error_5xx: int = Field(..., ge=0)
+    bytes_sum: int = Field(..., ge=0)
+    hour: int = Field(..., ge=0, le=23)
 
-# Placeholder for loaded models
-loaded_models = {}
+class ScalingRequest(BaseModel):
+    history: List[LogInstance]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Load models into memory when the service starts.
-    """
+# --- LOAD ARTIFACTS ---
+try:
+    xgb_model = joblib.load("model/best_xgb.pkl")
+    gbr_model = joblib.load("model/best_gbr.pkl")
+    anomaly_model = joblib.load("model/anomaly_model.pkl")
+    scaler_x = joblib.load("model/scaler_x.pkl")
+except Exception as e:
+    print(f"Warning: Model artifacts not fully loaded: {e}")
+
+def engineer_features(history: List[LogInstance]):
+    df = pd.DataFrame([inst.model_dump() for inst in history]).reset_index(drop=True)
+    df['lag_24h'] = df['request_count'].shift(24)
+    df['lag_1h'] = df['request_count'].shift(1)
+    df['lag_2h'] = df['request_count'].shift(2)
+    df['rolling_mean_3h'] = df['request_count'].rolling(window=3).mean()
+    df['velocity'] = df['request_count'].diff() / (df['request_count'].shift(1) + 1)
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+    
+    feature_cols = [
+        'request_count', 'error_5xx', 'bytes_sum', 
+        'lag_24h', 'lag_1h', 'lag_2h', 
+        'rolling_mean_3h', 'velocity', 
+        'hour_sin', 'hour_cos'
+    ]
+    latest_row = df.tail(1).copy()
+    inference_data = latest_row[feature_cols]
+    if inference_data.isnull().any().any():
+        raise ValueError("Insufficient history. Provide 25+ hours of data.")
+    return inference_data
+
+def check_anomaly_internal(history: List[LogInstance]):
+    """Internal helper to run anomaly detection without a separate HTTP call."""
+    df = pd.DataFrame([inst.model_dump() for inst in history])
+    df['rolling_mean'] = df['request_count'].rolling(window=6).mean()
+    df['rolling_std'] = df['request_count'].rolling(window=6).std()
+    df['delta'] = df['request_count'].diff()
+    anomaly_features = ['request_count', 'rolling_mean', 'rolling_std', 'delta', 'error_5xx']
+    latest_row = df.tail(1).copy()
+    if latest_row[anomaly_features].isnull().any().any():
+        return False, 0.0 # Not enough data to judge
+    signal = anomaly_model.predict(latest_row[anomaly_features])
+    return bool(signal[0] == -1), float(signal[0])
+
+# --- EXISTING ENDPOINTS ---
+
+@app.post("/predict-scaling_on_xgb")
+async def predict_xgb(request: ScalingRequest):
     try:
-        loaded_models["gbr"] = joblib.load(MODELS["gbr"])
-        loaded_models["xgb"] = joblib.load(MODELS["xgb"])
-        loaded_models["anomaly"] = joblib.load(MODELS["anomaly"])
-        print("Models loaded successfully")
+        inference_df = engineer_features(request.history)
+        X_scaled = scaler_x.transform(inference_df)
+        prediction = xgb_model.predict(X_scaled)[0]
+        final_forecast = max(0, prediction + 50)
+        return {"model": "XGBoost", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / 500))}
     except Exception as e:
-        print(f"Error loading models: {e}. Ensure artifacts exist.")
-    yield
-    # Shutdown code if needed
+        raise HTTPException(status_code=400, detail=str(e))
 
-app = FastAPI(
-    title="Cloud Operations ML Service",
-    description="API for Proactive Auto-Scaling and Log Anomaly Detection",
-    version="0.1.0",
-    lifespan=lifespan
-)
+@app.post("/predict-scaling_on_gbr")
+async def predict_gbr(request: ScalingRequest):
+    try:
+        inference_df = engineer_features(request.history)
+        X_scaled = scaler_x.transform(inference_df)
+        prediction = gbr_model.predict(X_scaled)[0]
+        final_forecast = max(0, prediction + 50)
+        return {"model": "GBR", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / 500))}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-# --- 2. SCHEMAS ---
-class LogEntry(BaseModel):
-    request_count: int
-    error_5xx: int
-    bytes_sum: int
-    hour: int
+# --- NEW COMBINATION ENDPOINTS ---
 
-class PredictionRequest(BaseModel):
-    history: List[LogEntry] 
+@app.post("/predict-scaling-smart-xgb")
+async def predict_smart_xgb(request: ScalingRequest):
+    """Combines Anomaly Detection with XGBoost Scaling."""
+    try:
+        is_anomaly, score = check_anomaly_internal(request.history)
+        inference_df = engineer_features(request.history)
+        X_scaled = scaler_x.transform(inference_df)
+        prediction = xgb_model.predict(X_scaled)[0]
+        
+        # Logic: If anomaly is detected, we might scale more conservatively or flag a warning
+        final_forecast = prediction + (100 if is_anomaly else 50)
+        
+        return {
+            "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+            "is_anomaly": is_anomaly,
+            "forecast_next_hour": round(float(final_forecast), 2),
+            "recommended_instances": int(np.ceil(final_forecast / 500)),
+            "model_used": "XGBoost + IsolationForest"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-def build_tree_features(df):
-    x = df.copy().sort_values(by="hour")
-    #for lag in [1, 2, 24]:
-    for lag in [1, 2]:
-        x[f"lag_{lag}"] = x["request_count"].shift(lag)
-    x["hour_sin"] = np.sin(2 * np.pi * x.hour / 24)
-    x["hour_cos"] = np.cos(2 * np.pi * x.hour / 24)
-    x = x.dropna()
-    return x.drop('hour', axis=1)
-
-# --- 3. ENDPOINTS ---
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "model_loaded": len(loaded_models) > 0}
-
-@app.post("/predict-scaling")
-async def predict_scaling(data: PredictionRequest):
-    """
-    Receives recent logs and returns the predicted traffic for the next hour.
-    """
-    if "xgb" not in loaded_models:
-        raise HTTPException(status_code=500, detail="Model not loaded. Check server logs.")
-    
-    if len(data.history) < 24:
-        raise HTTPException(status_code=400, detail="Need at least 24 hours of history for prediction.")
-    
-    # Convert input to DataFrame
-    df = pd.DataFrame([item.model_dump() for item in data.history])
-
-    features = build_tree_features(df)
-
-    prediction = loaded_models["xgb"].predict(features)
-    predicted_request_count = prediction.mean() * 1.1 
-    return {
-        "model": "xgb",
-        "predicted_request_count": float(predicted_request_count),
-        "recommended_instances": int(np.ceil(predicted_request_count / COUNT_PER_INSTANCE)) # e.g., 100 reqs per instance
-    }
-
-@app.post("/predict-scaling-with-gbr")
-async def predict_scaling(data: PredictionRequest):
-    """
-    Receives recent logs and returns the predicted traffic for the next hour.
-    """
-    if "xgb" not in loaded_models:
-        raise HTTPException(status_code=500, detail="Model not loaded. Check server logs.")
-    
-    if len(data.history) < 24:
-        raise HTTPException(status_code=400, detail="Need at least 24 hours of history for prediction.")
-    
-    # Convert input to DataFrame
-    df = pd.DataFrame([item.model_dump() for item in data.history])
-
-    features = build_tree_features(df)
-
-    prediction = loaded_models["gbr"].predict(features)
-    predicted_request_count = prediction.mean() * 1.1 
-    return {
-        "model": "gbr",
-        "predicted_request_count": float(predicted_request_count),
-        "recommended_instances": int(np.ceil(predicted_request_count / COUNT_PER_INSTANCE)) # e.g., 100 reqs per instance
-    }
+@app.post("/predict-scaling-smart-gbr")
+async def predict_smart_gbr(request: ScalingRequest):
+    """Combines Anomaly Detection with GBR Scaling."""
+    try:
+        is_anomaly, score = check_anomaly_internal(request.history)
+        inference_df = engineer_features(request.history)
+        X_scaled = scaler_x.transform(inference_df)
+        prediction = gbr_model.predict(X_scaled)[0]
+        
+        final_forecast = prediction + (100 if is_anomaly else 50)
+        
+        return {
+            "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+            "is_anomaly": is_anomaly,
+            "forecast_next_hour": round(float(final_forecast), 2),
+            "recommended_instances": int(np.ceil(final_forecast / 500)),
+            "model_used": "GBR + IsolationForest"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/detect-anomalies")
-async def detect_anomalies(data:  PredictionRequest):
-    """
-    Analyzes a batch of logs and returns indices of detected anomalies.
-    """
-    if "anomaly" not in loaded_models:
-        raise HTTPException(status_code=500, detail="Anomaly model not loaded. Check server logs.")
-    
-    df = pd.DataFrame([item.model_dump() for item in data.history])
+async def detect_anomalies(request: ScalingRequest):
+    try:
+        df = pd.DataFrame([inst.model_dump() for inst in request.history])
+        
+        # Isolation Forest features typically used in your pipeline
+        df['rolling_mean'] = df['request_count'].rolling(window=6).mean()
+        df['rolling_std'] = df['request_count'].rolling(window=6).std()
+        df['delta'] = df['request_count'].diff()
+        
+        anomaly_features = ['request_count', 'rolling_mean', 'rolling_std', 'delta', 'error_5xx']
+        latest_row = df.tail(1).copy()
+        
+        if latest_row[anomaly_features].isnull().any().any():
+            return {"status": "pending", "message": "Need at least 6 hours for anomaly window"}
 
-    # Features for Isolation Forest
-    features = df[['request_count', 'error_5xx', 'bytes_sum']]
-    scaler = MinMaxScaler()
-    X_scaled = scaler.fit_transform(features)
-    
-    features['anomaly_signal'] = loaded_models["anomaly"].predict(X_scaled)
-    anomalies = features[features['anomaly_signal'] == -1]
-    anomalies_percentage = len(anomalies)/len(features)
-    
-    return {
-        "total_processed": len(df),
-        "anomalies_percentage": round(anomalies_percentage,3), # Placeholder
-        "indices": anomalies.index.tolist()
-    }
+        signal = anomaly_model.predict(latest_row[anomaly_features].values)
+        
+        return {
+            "is_anomaly": bool(signal[0] == -1),
+            "anomaly_score": float(signal[0]),
+            "status": "success"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Anomaly Detection Error: {str(e)}")
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 # --- 4. RUNNING THE SERVICE ---
 if __name__ == "__main__":
