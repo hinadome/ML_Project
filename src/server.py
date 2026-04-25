@@ -4,7 +4,7 @@ import numpy as np
 import os
 from fastapi import FastAPI, HTTPException
 from typing import List
-from schema import LogInstance, ScalingRequest, ScalingResponse, SmartScalingResponse, AnomalyDetectionResponse, HealthResponse
+from .schema import LogInstance, ScalingRequest, ScalingResponse, SmartScalingResponse, AnomalyDetectionResponse, HealthResponse
 
 COUNT_PER_INSTANCE=100000
 NORMAL_ADJUST_COUNT=10000
