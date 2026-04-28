@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir \
     numpy \
     joblib \
     scikit-learn \
+    python-dotenv \
     xgboost
 
 COPY main.py .

@@ -3,14 +3,91 @@ import pandas as pd
 import numpy as np
 import os
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from typing import List
 from .schema import LogInstance, ScalingRequest, ScalingResponse, SmartScalingResponse, AnomalyDetectionResponse, HealthResponse
+import logging
+import json
+
+# Configure logging
+log_file_path = os.path.join(os.path.dirname(__file__), "..", "app.log")
+
+# Ensure directory exists
+os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+
+# Remove any existing handlers from root logger
+root_logger = logging.getLogger()
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+
+# Create file handler with explicit flushing
+file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+
+# Create stream handler
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+stream_handler.setFormatter(stream_formatter)
+
+# Configure root logger with handlers
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(stream_handler)
+
+# Create app-specific logger
+logger = logging.getLogger("app")
+
+def log_structured(message, level="INFO"):
+    """Log a message with structured JSON format."""
+    entry = {
+        "severity": level,
+        "message": message,
+        "component": "local-testing"
+    }
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    env = os.getenv("ENV", "dev").lower()
+    
+    if env == "prod":
+        # Production: write to stdout (Cloud Run captures stdout)
+        print(json.dumps(entry))
+    else:
+        # Development: use logger
+        logger.log(log_level, json.dumps(entry))
 
 COUNT_PER_INSTANCE=100000
 NORMAL_ADJUST_COUNT=10000
 ABNORMAL_ADJUST_COUNT=25000
 
 app = FastAPI(title="Proactive Traffic Scaler & Anomaly Detector")
+
+# --- CUSTOM EXCEPTION HANDLERS ---
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """Handle validation errors and log them using log_structured."""
+    error_details = []
+    for error in exc.errors():
+        error_details.append({
+            "field": str(error.get("loc", ["unknown"])[1:]),
+            "message": error.get("msg", "Unknown error"),
+            "type": error.get("type", "unknown")
+        })
+    
+    log_structured(
+        f"Validation Error: {json.dumps(error_details)}", 
+        level="ERROR"
+    )
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Validation error",
+            "errors": error_details
+        }
+    )
 
 # --- LOAD ARTIFACTS ---
 try:
@@ -19,7 +96,7 @@ try:
     anomaly_model = joblib.load("model/anomaly_model.pkl")
     scaler_x = joblib.load("model/scaler_x.pkl")
 except Exception as e:
-    print(f"Warning: Model artifacts not fully loaded: {e}")
+    log_structured(f"Model artifacts not fully loaded: {e}", level="ERROR")
 
 def engineer_features(history: List[LogInstance]):
     df = pd.DataFrame([inst.model_dump() for inst in history]).reset_index(drop=True)
@@ -40,6 +117,7 @@ def engineer_features(history: List[LogInstance]):
     latest_row = df.tail(1).copy()
     inference_data = latest_row[feature_cols]
     if inference_data.isnull().any().any():
+        log_structured(f"Insufficient history. Provide 25+ hours of data.", level="WARNING")
         raise ValueError("Insufficient history. Provide 25+ hours of data.")
     return inference_data
 
@@ -66,6 +144,7 @@ async def predict_xgb(request: ScalingRequest):
         final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
         return {"model": "XGBoost", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE))}
     except Exception as e:
+        log_structured(f"predict_xgb :{e}", level="ERROR")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/predict-scaling_on_gbr", response_model=ScalingResponse)
@@ -77,6 +156,7 @@ async def predict_gbr(request: ScalingRequest):
         final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
         return {"model": "GBR", "forecast": round(float(final_forecast), 2), "instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE))}
     except Exception as e:
+        log_structured(f"predict-scaling_on_gbr :{e}", level="ERROR")
         raise HTTPException(status_code=400, detail=str(e))
 
 # --- NEW COMBINATION ENDPOINTS ---
@@ -101,6 +181,7 @@ async def predict_smart_xgb(request: ScalingRequest):
             "model_used": "XGBoost + IsolationForest"
         }
     except Exception as e:
+        log_structured(f"predict-scaling-smart-xgb :{e}", level="ERROR")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/predict-scaling-smart-gbr", response_model=SmartScalingResponse)
@@ -122,6 +203,7 @@ async def predict_smart_gbr(request: ScalingRequest):
             "model_used": "GBR + IsolationForest"
         }
     except Exception as e:
+        log_structured(f"predict-scaling-smart-gbr :{e}", level="ERROR")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/detect-anomalies", response_model=AnomalyDetectionResponse)
@@ -148,6 +230,7 @@ async def detect_anomalies(request: ScalingRequest):
             "status": "success"
         }
     except Exception as e:
+        log_structured(f"Anomaly Detection Error: {e}", level="ERROR")
         raise HTTPException(status_code=400, detail=f"Anomaly Detection Error: {str(e)}")
 
 @app.get("/health", response_model=HealthResponse)

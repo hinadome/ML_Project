@@ -8,6 +8,10 @@ Usage:
     uvicorn main:app --reload
 """
 
+# Load .env BEFORE importing anything else
+from dotenv import load_dotenv
+load_dotenv()
+
 import uvicorn
 from src.server import app
 
