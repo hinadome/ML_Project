@@ -26,5 +26,5 @@ jobs:
           pip install --no-cache-dir -e ".[dev]"
       - name: Test with pytest
         run: |
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov httpx
           pytest test_server.py -v
