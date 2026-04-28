@@ -1,0 +1,6 @@
+jobs:
+  run-tests:
+    uses: ./.github/workflows/pytest-server-test.yml
+  run-deploy:
+    needs: run-tests
+    uses: ./.github/workflows/google-cloudrun-docker.yml
