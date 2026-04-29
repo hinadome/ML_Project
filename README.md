@@ -122,7 +122,25 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
   - Adaptive scaling based on system health
   - Recommendation flag ("Normal scaling" or "Check system health")
 
-### 5.6 Anomaly Detection Only
+### 5.6 Smart XGBoost + GBR Scaling (with Anomaly Detection)
+**POST `/predict-scaling-smart`**
+- **Purpose:** Combines Average(XGBoost + GBR forecasting) with IsolationForest anomaly detection for intelligent scaling recommendations
+- **Parameters:** `ScalingRequest` (body)
+- **Response:** `SmartScalingResponse`
+- **Anomaly Adjustment:** Uses 25k adjustment if anomaly detected, 10k for normal conditions
+- **Minimum History:** 25 hours required (6 hours minimum for anomaly detection window)
+- **Features:**
+  - Real-time anomaly detection
+  - Adaptive scaling based on system health
+  - Recommendation flag ("Normal scaling" or "Check system health")
+- **Example:**
+  ```bash
+  curl -X POST http://localhost:8000/predict-scaling-smart-xgb \
+    -H "Content-Type: application/json" \
+    -d '{"history": [...]}'
+  ```
+
+### 5.7 Anomaly Detection Only
 **POST `/detect-anomalies`**
 - **Purpose:** Standalone anomaly detection using IsolationForest without scaling prediction
 - **Parameters:** `ScalingRequest` (body)
@@ -204,7 +222,7 @@ Response from basic scaling endpoints (`/predict-scaling_on_xgb`, `/predict-scal
 ```
 
 #### SmartScalingResponse
-Response from smart endpoints (`/predict-scaling-smart-xgb`, `/predict-scaling-smart-gbr`).
+Response from smart endpoints (`/predict-scaling-smart`,`/predict-scaling-smart-xgb`, `/predict-scaling-smart-gbr`).
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
