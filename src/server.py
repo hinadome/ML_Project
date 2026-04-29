@@ -161,6 +161,30 @@ async def predict_gbr(request: ScalingRequest):
 
 # --- NEW COMBINATION ENDPOINTS ---
 
+@app.post("/predict-scaling-smart", response_model=SmartScalingResponse)
+async def predict_smart_xgb(request: ScalingRequest):
+    """Combines Anomaly Detection with XGBoost Scaling."""
+    try:
+        is_anomaly, score = check_anomaly_internal(request.history)
+        inference_df = engineer_features(request.history)
+        X_scaled = scaler_x.transform(inference_df)
+        xgb_prediction = xgb_model.predict(X_scaled)[0]
+        gbr_prediction = gbr_model.predict(X_scaled)[0]
+        prediction = ( xgb_prediction + gbr_prediction ) / 2
+        # Logic: If anomaly is detected, we might scale more conservatively or flag a warning
+        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
+        
+        return {
+            "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+            "is_anomaly": is_anomaly,
+            "forecast_next_hour": round(float(final_forecast), 2),
+            "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
+            "model_used": "XGBoost + GBR + IsolationForest"
+        }
+    except Exception as e:
+        log_structured(f"predict-scaling-smart :{e}", level="ERROR")
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/predict-scaling-smart-xgb", response_model=SmartScalingResponse)
 async def predict_smart_xgb(request: ScalingRequest):
     """Combines Anomaly Detection with XGBoost Scaling."""
