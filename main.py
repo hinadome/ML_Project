@@ -16,11 +16,11 @@ import uvicorn
 from src.server import app
 
 if __name__ == "__main__":
-    # Run the server on localhost:8000
+    # Run the server on localhost:8080
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=8000,
+        port=8080,
         reload=False
     )
 
