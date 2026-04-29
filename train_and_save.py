@@ -82,7 +82,7 @@ def run_sequence_anomaly_detection(df, window_size=6):
     plt.scatter(anomalies.index, anomalies['request_count'], color='red', label='Anomalies', s=50, zorder=5)
     plt.title("Detected Anomalies in Traffic Patterns")
     plt.legend()
-    plt.show()
+    #plt.show()
 
     # Save Artifacts
     os.makedirs('model', exist_ok=True)
@@ -261,7 +261,7 @@ def run_tuned_comparison(df_raw):
     axes[1, 1].set_title("Top 10 Features (XGBoost)")
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
 
     # 6. PERFORMANCE TOURNAMENT
     xgb_metrics = calculate_advanced_metrics(y_test, xgb_preds)
@@ -325,7 +325,7 @@ def run_tuned_comparison_on_gbr(df_raw):
     importances = pd.Series(best_xgb.feature_importances_, index=features).sort_values()
     importances.plot(kind='barh', color='teal')
     plt.title("Feature Importance: Advanced Dynamics")
-    plt.show()
+    #plt.show()
 
     return best_xgb, scaler_x
     
@@ -394,7 +394,7 @@ def run_comprehensive_training(df_raw):
     axes[1, 1].set_title("Top 10 Advanced Feature Importance")
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
 
     # 6. Performance Metrics
     metrics = calculate_advanced_metrics(y_test, xgb_preds)
