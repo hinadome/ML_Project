@@ -345,6 +345,60 @@ class TestPredictScalingGBR:
         assert "forecast" in data
         assert "instances" in data
 
+# ============================================================================
+# SMART ENDPOINT TESTS
+# ============================================================================
+
+class TestPredictScalingSmart:
+    """Tests for POST /predict-scaling-smart endpoint."""
+    
+    def test_smart_valid_history(self, valid_history_25h):
+        """Smart should make prediction with valid history."""
+        request = ScalingRequest(history=valid_history_25h)
+        response = client.post("/predict-scaling-smart", json=request.model_dump())
+        assert response.status_code == 200
+        data = response.json()
+        assert "recommendation" in data
+        assert "is_anomaly" in data
+        assert "forecast_next_hour" in data
+        assert "recommended_instances" in data
+        assert "model_used" in data
+        assert data["model_used"] == "XGBoost + GBR + IsolationForest"
+    
+    def test_smart_normal_conditions(self, valid_history_25h):
+        """Smart XGB should flag as non-anomaly in normal conditions."""
+        request = ScalingRequest(history=valid_history_25h)
+        response = client.post("/predict-scaling-smart", json=request.model_dump())
+        data = response.json()
+        # In normal conditions, should recommend "Normal scaling"
+        assert data["recommendation"] in ["Normal scaling", "Check system health"]
+    
+    def test_smart_anomalous_spike(self, anomalous_history):
+        """Smart should detect anomalies with request spike."""
+        request = ScalingRequest(history=anomalous_history)
+        response = client.post("/predict-scaling-smart", json=request.model_dump())
+        assert response.status_code == 200
+        data = response.json()
+        # With anomaly, forecast should be higher (prediction + 100 instead of + 50)
+        assert data["forecast_next_hour"] >= 0
+    
+    def test_smart_high_errors(self, high_error_history):
+        """Smart XGB should handle high error rates."""
+        request = ScalingRequest(history=high_error_history)
+        response = client.post("/predict-scaling-smart", json=request.model_dump())
+        assert response.status_code == 200
+        data = response.json()
+        assert data["forecast_next_hour"] >= 0
+    
+    def test_smart_insufficient_history(self):
+        """Smart should fail with insufficient history."""
+        history = [
+            LogInstance(request_count=1000, error_5xx=10, bytes_sum=5000, hour=i % 24)
+            for i in range(5)
+        ]
+        request = ScalingRequest(history=history)
+        response = client.post("/predict-scaling-smart", json=request.model_dump())
+        assert response.status_code == 400
 
 # ============================================================================
 # SMART XGB ENDPOINT TESTS

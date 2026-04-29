@@ -16,17 +16,6 @@ import time
 # --- 1. ROBUST PARSING & AGGREGATION ---
 LOG_PATTERN = re.compile(r'(\S+) - - \[(.*?)\] "(.*?)" (\d{3}) (\S+)')
 
-# --- HELPER FUNCTIONS ---
-def build_tree_features(df):
-    x = df.copy().sort_values(by="timestamp")
-    #for lag in [1, 2, 24]:
-    for lag in [1, 2]:
-        x[f"lag_{lag}"] = x["request_count"].shift(lag)
-    x["hour_sin"] = np.sin(2 * np.pi * x.index.hour / 24)
-    x["hour_cos"] = np.cos(2 * np.pi * x.index.hour / 24)
-    x["target"] = x["request_count"].shift(-1)
-    return x.dropna()
-
 def parse_line(line):
     m = LOG_PATTERN.match(line.strip())
     if not m: return None
