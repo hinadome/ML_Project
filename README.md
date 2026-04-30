@@ -16,7 +16,7 @@ An end-to-end MLOps solution that transforms reactive cloud infrastructure into 
 ### 3. Technology Stack
 | Domain | Technologies |
 | :--- | :--- |
-| **Machine Learning** | Python, Scikit-learn(GradientBoostingRegressor,IsolationForest), XGBoost |
+| **Machine Learning** | Python, Scikit-learn([GradientBoostingRegressor](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingRegressor.html),[IsolationForest](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html)), XGBoost([XGBRegressor](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.XGBRegressor)) |
 | **Cloud Infrastructure** | GCP (Cloud Run, Artifact Registry) |
 | **DevOps & MLOps** | Docker, GitHub Actions (CI/CD) |
 | **Application Layer** | FastAPI (REST API), Uvicorn |
@@ -26,7 +26,7 @@ An end-to-end MLOps solution that transforms reactive cloud infrastructure into 
 ### 4. Implementation Phases (Milestones)
 
 #### Phase 1: Data Engineering & EDA (2d)
-* **Ingestion:** Parse [raw Apache/NASA logs](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html)  using Regex into structured Pandas DataFrames.
+* **Ingestion:** Parse [raw Apache/NASA logs](https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html) about 1 month using Regex into structured Pandas DataFrames.
 * **Validation:** Clean data, handle missing values, and ensure time-series continuity.
 * **EDA:** Visualize seasonal traffic patterns and error rate distributions.
 
