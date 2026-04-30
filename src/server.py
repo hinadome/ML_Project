@@ -94,7 +94,7 @@ try:
     xgb_model = joblib.load("model/best_xgb.pkl")
     gbr_model = joblib.load("model/best_gbr.pkl")
     anomaly_model = joblib.load("model/anomaly_model.pkl")
-    scaler_x = joblib.load("model/scaler_x.pkl")
+    #scaler_x = joblib.load("model/scaler_x.pkl")
 except Exception as e:
     log_structured(f"Model artifacts not fully loaded: {e}", level="ERROR")
 
@@ -259,7 +259,13 @@ async def detect_anomalies(request: ScalingRequest):
 
 @app.get("/health", response_model=HealthResponse)
 def health():
-    return {"status": "healthy"}
+    try:
+        if xgb_model and gbr_model and anomaly_model and scaler_x:
+            return {"status": "healthy"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Model not properly loaded")
+    except:
+            raise HTTPException(status_code=500, detail=f"Model not properly loaded")
 
 # --- 4. RUNNING THE SERVICE ---
 if __name__ == "__main__":
