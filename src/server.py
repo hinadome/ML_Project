@@ -94,7 +94,7 @@ try:
     xgb_model = joblib.load("model/best_xgb.pkl")
     gbr_model = joblib.load("model/best_gbr.pkl")
     anomaly_model = joblib.load("model/anomaly_model.pkl")
-    #scaler_x = joblib.load("model/scaler_x.pkl")
+    scaler_x = joblib.load("model/scaler_x.pkl")
 except Exception as e:
     log_structured(f"Model artifacts not fully loaded: {e}", level="ERROR")
 
