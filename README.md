@@ -353,3 +353,9 @@ All endpoints return structured error responses:
 | `NORMAL_ADJUST_COUNT` | 10,000 | Base forecast adjustment during normal conditions |
 | `ABNORMAL_ADJUST_COUNT` | 25,000 | Enhanced forecast adjustment during anomalies |
 
+---
+
+## Term
+- GradientBoostingRegressor is a powerful ensemble machine learning algorithm in Scikit-learn that builds a predictive model by sequentially adding weak learners (typically decision trees) to minimize loss, often used for complex regression tasks. It combines gradient descent and boosting to iteratively improve performance by focusing on previous errors.
+- XGBRegressor is a class within the XGBoost library used for performing regression tasks using Gradient Boosted Decision Trees
+- Isolation Forest (iForest) algorithm is a popular and effective unsupervised learning method for anomaly detection. Unlike most outlier detection methods that try to define what "normal" looks like and flag everything else, Isolation Forest focuses directly on isolating anomalies.
