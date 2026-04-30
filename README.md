@@ -4,7 +4,9 @@
 ### 1. Project Vision
 An end-to-end MLOps solution that transforms reactive cloud infrastructure into a proactive, self-scaling system. By analyzing historical traffic logs, the system predicts upcoming traffic and gives signal/trigger to scaling system.
 
+![Concept](./img/Concept.jpeg)
 ---
+
 
 ### 2. Core Functional Pillars
 * **Proactive Auto-Scaling:** Uses Time-Series Forecasting (GradientBoostingRegressor,XGBoost + IsolationForest) to anticipate traffic and adjust cloud capacity ( instance ).
@@ -44,6 +46,7 @@ An end-to-end MLOps solution that transforms reactive cloud infrastructure into 
 #### Phase 5: Monitoring(2d)
 * **Monitoring:** Implement health checks and logging for the deployed API.
 
+![EndToEndSystemArchitecture](./img/EndToEndSystemArchitecture.jpeg)
 ---
 
 ## 5. API Endpoints
