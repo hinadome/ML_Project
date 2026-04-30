@@ -47,13 +47,50 @@ An end-to-end MLOps solution that transforms reactive cloud infrastructure into 
 * **Monitoring:** Implement health checks and logging for the deployed API.
 
 ![EndToEndSystemArchitecture](./img/EndToEndSystemArchitecture.jpeg)
+
 ---
 
-## 5. API Endpoints
+## 5. Constants
+
+| Constant | Value | Description |
+| :--- | :--- | :--- |
+| `COUNT_PER_INSTANCE` | 100,000 | Requests per instance (used to calculate `instances` field) |
+| `NORMAL_ADJUST_COUNT` | 10,000 | Base forecast adjustment during normal conditions |
+| `ABNORMAL_ADJUST_COUNT` | 25,000 | Enhanced forecast adjustment during anomalies |
+
+---
+
+## 6. Feature Engineering
+
+All prediction endpoints use the following engineered features from historical log data:
+
+| Feature | Description |
+| :--- | :--- |
+| `request_count` | Current hourly request count |
+| `error_5xx` | Current hourly 5xx error count |
+| `bytes_sum` | Current hourly bytes transferred |
+| `lag_24h` | Request count from 24 hours ago |
+| `lag_1h` | Request count from 1 hour ago |
+| `lag_2h` | Request count from 2 hours ago |
+| `rolling_mean_3h` | 3-hour rolling average of requests |
+| `velocity` | Rate of change in request count |
+| `hour_sin` | Cyclical encoding of hour (sine) |
+| `hour_cos` | Cyclical encoding of hour (cosine) |
+
+**Anomaly Detection Features:**
+- `rolling_mean` (6-hour window)
+- `rolling_std` (6-hour window)
+- `delta` (hourly change)
+- `request_count`
+- `error_5xx`
+
+---
+
+## 7. API Endpoints
 
 The FastAPI service provides 6 endpoints for traffic forecasting and anomaly detection:
 
-### 5.1 Health Check
+### 7.1 Health Check
 **GET `/health`**
 - **Purpose:** Health check endpoint for service availability monitoring
 - **Parameters:** None
@@ -67,7 +104,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
   { "status": "healthy" }
   ```
 
-### 5.2 XGBoost Scaling Prediction
+### 7.2 XGBoost Scaling Prediction
 **POST `/predict-scaling_on_xgb`**
 - **Purpose:** Predicts next-hour traffic and recommended instance count using XGBoost model
 - **Parameters:** `ScalingRequest` (body)
@@ -81,7 +118,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
     -d '{"history": [...]}'
   ```
 
-### 5.3 GBR (Gradient Boosting Regressor) Scaling Prediction
+### 7.3 GBR (Gradient Boosting Regressor) Scaling Prediction
 **POST `/predict-scaling_on_gbr`**
 - **Purpose:** Predicts next-hour traffic and recommended instance count using GBR model
 - **Parameters:** `ScalingRequest` (body)
@@ -95,7 +132,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
     -d '{"history": [...]}'
   ```
 
-### 5.4 Smart XGBoost Scaling (with Anomaly Detection)
+### 7.4 Smart XGBoost Scaling (with Anomaly Detection)
 **POST `/predict-scaling-smart-xgb`**
 - **Purpose:** Combines XGBoost forecasting with IsolationForest anomaly detection for intelligent scaling recommendations
 - **Parameters:** `ScalingRequest` (body)
@@ -113,7 +150,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
     -d '{"history": [...]}'
   ```
 
-### 5.5 Smart GBR Scaling (with Anomaly Detection)
+### 7.5 Smart GBR Scaling (with Anomaly Detection)
 **POST `/predict-scaling-smart-gbr`**
 - **Purpose:** Combines GBR forecasting with IsolationForest anomaly detection for intelligent scaling recommendations
 - **Parameters:** `ScalingRequest` (body)
@@ -125,7 +162,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
   - Adaptive scaling based on system health
   - Recommendation flag ("Normal scaling" or "Check system health")
 
-### 5.6 Smart XGBoost + GBR Scaling (with Anomaly Detection)
+### 7.6 Smart XGBoost + GBR Scaling (with Anomaly Detection)
 **POST `/predict-scaling-smart`**
 - **Purpose:** Combines Average(XGBoost + GBR forecasting) with IsolationForest anomaly detection for intelligent scaling recommendations
 - **Parameters:** `ScalingRequest` (body)
@@ -143,7 +180,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
     -d '{"history": [...]}'
   ```
 
-### 5.7 Anomaly Detection Only
+### 7.7 Anomaly Detection Only
 **POST `/detect-anomalies`**
 - **Purpose:** Standalone anomaly detection using IsolationForest without scaling prediction
 - **Parameters:** `ScalingRequest` (body)
@@ -161,7 +198,7 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
 
 ---
 
-## 6. Data Schemas
+## 8. Data Schemas
 
 ### Request Schemas
 
@@ -285,33 +322,7 @@ Response from `/health` endpoint.
 
 ---
 
-## 7. Feature Engineering
-
-All prediction endpoints use the following engineered features from historical log data:
-
-| Feature | Description |
-| :--- | :--- |
-| `request_count` | Current hourly request count |
-| `error_5xx` | Current hourly 5xx error count |
-| `bytes_sum` | Current hourly bytes transferred |
-| `lag_24h` | Request count from 24 hours ago |
-| `lag_1h` | Request count from 1 hour ago |
-| `lag_2h` | Request count from 2 hours ago |
-| `rolling_mean_3h` | 3-hour rolling average of requests |
-| `velocity` | Rate of change in request count |
-| `hour_sin` | Cyclical encoding of hour (sine) |
-| `hour_cos` | Cyclical encoding of hour (cosine) |
-
-**Anomaly Detection Features:**
-- `rolling_mean` (6-hour window)
-- `rolling_std` (6-hour window)
-- `delta` (hourly change)
-- `request_count`
-- `error_5xx`
-
----
-
-## 8. Error Handling
+## 9. Error Handling
 
 All endpoints return structured error responses:
 
@@ -342,17 +353,6 @@ All endpoints return structured error responses:
   "detail": "Error message from model inference"
 }
 ```
-
----
-
-## 9. Constants
-
-| Constant | Value | Description |
-| :--- | :--- | :--- |
-| `COUNT_PER_INSTANCE` | 100,000 | Requests per instance (used to calculate `instances` field) |
-| `NORMAL_ADJUST_COUNT` | 10,000 | Base forecast adjustment during normal conditions |
-| `ABNORMAL_ADJUST_COUNT` | 25,000 | Enhanced forecast adjustment during anomalies |
-
 ---
 
 ## Term
