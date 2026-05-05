@@ -74,8 +74,8 @@ def run_sequence_anomaly_detection(df, window_size=6):
     #plt.show()
 
     # Save Artifacts
-    os.makedirs('model', exist_ok=True)
-    joblib.dump(model, "model/anomaly_model.pkl")
+    os.makedirs('../model', exist_ok=True)
+    joblib.dump(model, "../model/anomaly_model.pkl")
 
     return analysis_df
 
@@ -207,10 +207,10 @@ def run_tuned_comparison(df_raw):
     best_gbr = tune_gbr(X_train, y_train)
     
     # Save Artifacts
-    os.makedirs('model', exist_ok=True)
-    joblib.dump(best_xgb, "model/best_xgb.pkl")
-    joblib.dump(best_gbr, "model/best_gbr.pkl")
-    joblib.dump(scaler_x, "model/scaler_x.pkl")
+    os.makedirs('../model', exist_ok=True)
+    joblib.dump(best_xgb, "../model/best_xgb.pkl")
+    joblib.dump(best_gbr, "../model/best_gbr.pkl")
+    joblib.dump(scaler_x, "../model/scaler_x.pkl")
 
     # 4. Apply Dynamic Safety Buffer
     # We use XGBoost's residuals to define the shared safety buffer
@@ -395,7 +395,7 @@ def run_comprehensive_training(df_raw):
 # --- 6. MAIN EXECUTION ---
 if __name__ == "__main__":
     # Example usage (Replace with your actual file path)
-    hourly_df = ingest_and_aggregate("data/NASA_access_log_Jul95.gz")
+    hourly_df = ingest_and_aggregate("../data/NASA_access_log_Jul95.gz")
     print(hourly_df)
     run_sequence_anomaly_detection(hourly_df)
     # lstm_model, scalers = train_lstm(hourly_df)
