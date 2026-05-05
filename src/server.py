@@ -98,6 +98,64 @@ try:
 except Exception as e:
     log_structured(f"Model artifacts not fully loaded: {e}", level="ERROR")
 
+
+# --- FEATURE ENGINEERING WITH COLD-START LOGIC ---
+def engineer_features_flexible(history: List[LogInstance]):
+    df = pd.DataFrame([inst.model_dump() for inst in history]).reset_index(drop=True)
+    history_len = len(df)
+    
+    # Base Features available from hour 1
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+    
+    # 1. COLD START (Less than 3 hours)
+    if history_len < 3:
+        current_val = df['request_count'].iloc[-1]
+        # Return a flag indicating we are in "Heuristic" mode
+        return None, "heuristic", current_val * 1.2
+    
+    # 2. WARM START (3 to 24 hours) - We synthesize the 24h lag
+    # We use the mean of available history as a 'neutral' substitute for the 24h lag
+    if history_len < 25:
+        df['lag_24h'] = df['request_count'].mean() 
+        model_status = "warm_start"
+    else:
+        df['lag_24h'] = df['request_count'].shift(24)
+        model_status = "full"
+
+    # Recent Dynamics (requires at least 3 rows)
+    df['lag_1h'] = df['request_count'].shift(1)
+    df['lag_2h'] = df['request_count'].shift(2)
+    df['rolling_mean_3h'] = df['request_count'].rolling(window=3).mean()
+    df['velocity'] = df['request_count'].diff() / (df['request_count'].shift(1) + 1)
+    
+    # Handle NaNs created by shifts in the warm-up phase (rows 1 and 2)
+    df = df.fillna(method='bfill').fillna(0)
+    
+    feature_cols = [
+        'request_count', 'error_5xx', 'bytes_sum', 
+        'lag_24h', 'lag_1h', 'lag_2h', 
+        'rolling_mean_3h', 'velocity', 
+        'hour_sin', 'hour_cos'
+    ]
+    
+    latest_row = df.tail(1)[feature_cols]
+    return latest_row, model_status, 0.0
+
+def check_anomaly_safe(history: List[LogInstance]):
+    """Runs anomaly detection only if 6+ hours of data exist."""
+    if len(history) < 6:
+        return False, 0.0
+    df = pd.DataFrame([inst.model_dump() for inst in history])
+    df['rolling_mean'] = df['request_count'].rolling(window=6).mean()
+    df['rolling_std'] = df['request_count'].rolling(window=6).std()
+    df['delta'] = df['request_count'].diff()
+    df = df.dropna()
+    
+    features = ['request_count', 'rolling_mean', 'rolling_std', 'delta', 'error_5xx']
+    signal = anomaly_model.predict(df[features].tail(1).values)
+    return bool(signal[0] == -1), float(signal[0])
+
 def engineer_features(history: List[LogInstance]):
     df = pd.DataFrame([inst.model_dump() for inst in history]).reset_index(drop=True)
     df['lag_24h'] = df['request_count'].shift(24)
@@ -138,7 +196,7 @@ def check_anomaly_internal(history: List[LogInstance]):
 @app.post("/predict-scaling_on_xgb", response_model=ScalingResponse)
 async def predict_xgb(request: ScalingRequest):
     try:
-        inference_df = engineer_features(request.history)
+        inference_df = engineer_features_flexible(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = xgb_model.predict(X_scaled)[0]
         final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
@@ -150,7 +208,7 @@ async def predict_xgb(request: ScalingRequest):
 @app.post("/predict-scaling_on_gbr", response_model=ScalingResponse)
 async def predict_gbr(request: ScalingRequest):
     try:
-        inference_df = engineer_features(request.history)
+        inference_df = engineer_features_flexible(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = gbr_model.predict(X_scaled)[0]
         final_forecast = max(0, prediction + NORMAL_ADJUST_COUNT)
@@ -165,8 +223,8 @@ async def predict_gbr(request: ScalingRequest):
 async def predict_smart_xgb(request: ScalingRequest):
     """Combines Anomaly Detection with XGBoost Scaling."""
     try:
-        is_anomaly, score = check_anomaly_internal(request.history)
-        inference_df = engineer_features(request.history)
+        is_anomaly, score = check_anomaly_safe(request.history)
+        inference_df = engineer_features_flexible(request.history)
         X_scaled = scaler_x.transform(inference_df)
         xgb_prediction = xgb_model.predict(X_scaled)[0]
         gbr_prediction = gbr_model.predict(X_scaled)[0]
@@ -189,8 +247,8 @@ async def predict_smart_xgb(request: ScalingRequest):
 async def predict_smart_xgb(request: ScalingRequest):
     """Combines Anomaly Detection with XGBoost Scaling."""
     try:
-        is_anomaly, score = check_anomaly_internal(request.history)
-        inference_df = engineer_features(request.history)
+        is_anomaly, score = check_anomaly_safe(request.history)
+        inference_df = engineer_features_flexible(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = xgb_model.predict(X_scaled)[0]
         
@@ -212,8 +270,8 @@ async def predict_smart_xgb(request: ScalingRequest):
 async def predict_smart_gbr(request: ScalingRequest):
     """Combines Anomaly Detection with GBR Scaling."""
     try:
-        is_anomaly, score = check_anomaly_internal(request.history)
-        inference_df = engineer_features(request.history)
+        is_anomaly, score = check_anomaly_safe(request.history)
+        inference_df = engineer_features_flexible(request.history)
         X_scaled = scaler_x.transform(inference_df)
         prediction = gbr_model.predict(X_scaled)[0]
         
