@@ -130,7 +130,7 @@ def engineer_features_flexible(history: List[LogInstance]):
     df['velocity'] = df['request_count'].diff() / (df['request_count'].shift(1) + 1)
     
     # Handle NaNs created by shifts in the warm-up phase (rows 1 and 2)
-    df = df.fillna(method='bfill').fillna(0)
+    df = df.bfill().fillna(0)
     
     feature_cols = [
         'request_count', 'error_5xx', 'bytes_sum', 
