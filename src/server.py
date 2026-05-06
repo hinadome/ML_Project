@@ -142,20 +142,6 @@ def engineer_features_flexible(history: List[LogInstance]):
     latest_row = df.tail(1)[feature_cols]
     return latest_row, model_status, 0.0
 
-def check_anomaly_safe(history: List[LogInstance]):
-    """Runs anomaly detection only if 6+ hours of data exist."""
-    if len(history) < 6:
-        return False, 0.0
-    df = pd.DataFrame([inst.model_dump() for inst in history])
-    df['rolling_mean'] = df['request_count'].rolling(window=6).mean()
-    df['rolling_std'] = df['request_count'].rolling(window=6).std()
-    df['delta'] = df['request_count'].diff()
-    df = df.dropna()
-    
-    features = ['request_count', 'rolling_mean', 'rolling_std', 'delta', 'error_5xx']
-    signal = anomaly_model.predict(df[features].tail(1).values)
-    return bool(signal[0] == -1), float(signal[0])
-
 def engineer_features(history: List[LogInstance]):
     df = pd.DataFrame([inst.model_dump() for inst in history]).reset_index(drop=True)
     df['lag_24h'] = df['request_count'].shift(24)
@@ -178,6 +164,21 @@ def engineer_features(history: List[LogInstance]):
         log_structured(f"Insufficient history. Provide 25+ hours of data.", level="WARNING")
         raise ValueError("Insufficient history. Provide 25+ hours of data.")
     return inference_data
+
+def check_anomaly_safe(history: List[LogInstance]):
+    """Runs anomaly detection only if 6+ hours of data exist."""
+    if len(history) < 6:
+        return False, 0.0
+
+    df = pd.DataFrame([inst.model_dump() for inst in history])
+    df['rolling_mean'] = df['request_count'].rolling(window=6).mean()
+    df['rolling_std'] = df['request_count'].rolling(window=6).std()
+    df['delta'] = df['request_count'].diff()
+    df = df.dropna()
+    
+    features = ['request_count', 'rolling_mean', 'rolling_std', 'delta', 'error_5xx']
+    signal = anomaly_model.predict(df[features].tail(1).values)
+    return bool(signal[0] == -1), float(signal[0])
 
 def check_anomaly_internal(history: List[LogInstance]):
     """Internal helper to run anomaly detection without a separate HTTP call."""
@@ -220,18 +221,28 @@ async def predict_gbr(request: ScalingRequest):
 # --- NEW COMBINATION ENDPOINTS ---
 
 @app.post("/predict-scaling-smart", response_model=SmartScalingResponse)
-async def predict_smart_xgb(request: ScalingRequest):
-    """Combines Anomaly Detection with XGBoost Scaling."""
+async def predict_smart(request: ScalingRequest):
+    """Combines Anomaly Detection with XGBoost and GBR Scaling."""
     try:
         is_anomaly, score = check_anomaly_safe(request.history)
-        inference_df = engineer_features_flexible(request.history)
+        inference_df, model_status, heuristic_value = engineer_features_flexible(request.history)
+
+        if inference_df is None:
+            final_forecast = max(0, heuristic_value + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+            return {
+                "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+                "is_anomaly": is_anomaly,
+                "forecast_next_hour": round(float(final_forecast), 2),
+                "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
+                "model_used": "Heuristic + IsolationForest"
+            }
+
         X_scaled = scaler_x.transform(inference_df)
         xgb_prediction = xgb_model.predict(X_scaled)[0]
         gbr_prediction = gbr_model.predict(X_scaled)[0]
-        prediction = ( xgb_prediction + gbr_prediction ) / 2
-        # Logic: If anomaly is detected, we might scale more conservatively or flag a warning
-        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
-        
+        prediction = (xgb_prediction + gbr_prediction) / 2
+        final_forecast = max(0, prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+
         return {
             "recommendation": "Check system health" if is_anomaly else "Normal scaling",
             "is_anomaly": is_anomaly,
@@ -248,13 +259,22 @@ async def predict_smart_xgb(request: ScalingRequest):
     """Combines Anomaly Detection with XGBoost Scaling."""
     try:
         is_anomaly, score = check_anomaly_safe(request.history)
-        inference_df = engineer_features_flexible(request.history)
+        inference_df, model_status, heuristic_value = engineer_features_flexible(request.history)
+
+        if inference_df is None:
+            final_forecast = max(0, heuristic_value + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+            return {
+                "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+                "is_anomaly": is_anomaly,
+                "forecast_next_hour": round(float(final_forecast), 2),
+                "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
+                "model_used": "Heuristic + IsolationForest"
+            }
+
         X_scaled = scaler_x.transform(inference_df)
         prediction = xgb_model.predict(X_scaled)[0]
-        
-        # Logic: If anomaly is detected, we might scale more conservatively or flag a warning
-        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
-        
+        final_forecast = max(0, prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+
         return {
             "recommendation": "Check system health" if is_anomaly else "Normal scaling",
             "is_anomaly": is_anomaly,
@@ -271,12 +291,22 @@ async def predict_smart_gbr(request: ScalingRequest):
     """Combines Anomaly Detection with GBR Scaling."""
     try:
         is_anomaly, score = check_anomaly_safe(request.history)
-        inference_df = engineer_features_flexible(request.history)
+        inference_df, model_status, heuristic_value = engineer_features_flexible(request.history)
+
+        if inference_df is None:
+            final_forecast = max(0, heuristic_value + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+            return {
+                "recommendation": "Check system health" if is_anomaly else "Normal scaling",
+                "is_anomaly": is_anomaly,
+                "forecast_next_hour": round(float(final_forecast), 2),
+                "recommended_instances": int(np.ceil(final_forecast / COUNT_PER_INSTANCE)),
+                "model_used": "Heuristic + IsolationForest"
+            }
+
         X_scaled = scaler_x.transform(inference_df)
         prediction = gbr_model.predict(X_scaled)[0]
-        
-        final_forecast = prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT)
-        
+        final_forecast = max(0, prediction + (ABNORMAL_ADJUST_COUNT if is_anomaly else NORMAL_ADJUST_COUNT))
+
         return {
             "recommendation": "Check system health" if is_anomaly else "Normal scaling",
             "is_anomaly": is_anomaly,

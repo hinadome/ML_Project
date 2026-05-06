@@ -376,15 +376,18 @@ class TestPredictScalingSmart:
         assert data["recommendation"] in ["Normal scaling", "Check system health"]
     
     def test_smart_cold_start_low_hours(self):
-        """Smart should handle cold-start with 1-2 hours of data."""
+        """Smart should handle cold-start with 1-2 hours of data using heuristic fallback."""
         history = [
             LogInstance(request_count=1000, error_5xx=10, bytes_sum=5000, hour=i % 24)
             for i in range(1)  # Only 1 hour
         ]
         request = ScalingRequest(history=history)
         response = client.post("/predict-scaling-smart", json=request.model_dump())
-        # Should return 200 or 400 depending on heuristic fallback
-        assert response.status_code in [200, 400]
+        assert response.status_code == 200
+        data = response.json()
+        assert data["model_used"] == "Heuristic + IsolationForest"
+        assert data["forecast_next_hour"] >= 0
+        assert data["recommended_instances"] >= 0
     
     def test_smart_warm_start_10_hours(self):
         """Smart should handle warm-start with 10 hours using synthetic lag_24h."""
