@@ -2,7 +2,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from typing import List
@@ -221,9 +221,25 @@ async def predict_gbr(request: ScalingRequest):
 # --- NEW COMBINATION ENDPOINTS ---
 
 @app.post("/predict-scaling-smart", response_model=SmartScalingResponse)
-async def predict_smart(request: ScalingRequest):
-    """Combines Anomaly Detection with XGBoost and GBR Scaling."""
+async def predict_smart(
+    request: ScalingRequest,
+    model: str | None = Query(
+        None,
+        pattern="^(xgb|gbr)$",
+        description="Optional model selector: xgb or gbr",
+    ),
+):
+    """Combines Anomaly Detection with XGBoost and GBR Scaling.
+
+    If `model` is provided, the request is delegated to the corresponding
+    smart endpoint implementation.
+    """
     try:
+        if model == "xgb":
+            return await predict_smart_xgb(request)
+        if model == "gbr":
+            return await predict_smart_gbr(request)
+
         is_anomaly, score = check_anomaly_safe(request.history)
         inference_df, model_status, heuristic_value = engineer_features_flexible(request.history)
 

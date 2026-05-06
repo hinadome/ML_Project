@@ -366,6 +366,22 @@ class TestPredictScalingSmart:
         assert "recommended_instances" in data
         assert "model_used" in data
         assert data["model_used"] == "XGBoost + GBR + IsolationForest"
+
+    def test_smart_query_model_xgb(self, valid_history_25h):
+        """Smart should route to XGB when `model=xgb` is provided."""
+        request = ScalingRequest(history=valid_history_25h)
+        response = client.post("/predict-scaling-smart?model=xgb", json=request.model_dump())
+        assert response.status_code == 200
+        data = response.json()
+        assert data["model_used"] == "XGBoost + IsolationForest"
+
+    def test_smart_query_model_gbr(self, valid_history_25h):
+        """Smart should route to GBR when `model=gbr` is provided."""
+        request = ScalingRequest(history=valid_history_25h)
+        response = client.post("/predict-scaling-smart?model=gbr", json=request.model_dump())
+        assert response.status_code == 200
+        data = response.json()
+        assert data["model_used"] == "GBR + IsolationForest"
     
     def test_smart_normal_conditions(self, valid_history_25h):
         """Smart XGB should flag as non-anomaly in normal conditions."""
