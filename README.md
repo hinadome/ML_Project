@@ -164,18 +164,38 @@ The FastAPI service provides 6 endpoints for traffic forecasting and anomaly det
 
 ### 7.6 Smart XGBoost + GBR Scaling (with Anomaly Detection)
 **POST `/predict-scaling-smart`**
-- **Purpose:** Combines Average(XGBoost + GBR forecasting) with IsolationForest anomaly detection for intelligent scaling recommendations
+- **Purpose:** Default route uses the average of XGBoost and GBR forecasts with IsolationForest anomaly detection for intelligent scaling recommendations.
+- **Optional Query Parameter:** `model=xgb|gbr`
+  - `?model=xgb` delegates to the XGBoost smart pipeline (`predict_smart_xgb`)
+  - `?model=gbr` delegates to the GBR smart pipeline (`predict_smart_gbr`)
 - **Parameters:** `ScalingRequest` (body)
 - **Response:** `SmartScalingResponse`
 - **Anomaly Adjustment:** Uses 25k adjustment if anomaly detected, 10k for normal conditions
-- **Minimum History:** 25 hours required (6 hours minimum for anomaly detection window)
+- **History Support:**
+  - Cold-start support for very short history (<3 hours) using heuristic fallback
+  - Warm-start support for 3-24 hours using synthetic lag_24h
+  - Full model execution for 25+ hours
+  - Anomaly detection window still requires at least 6 hours of history
 - **Features:**
+  - Query-driven model selection
   - Real-time anomaly detection
   - Adaptive scaling based on system health
   - Recommendation flag ("Normal scaling" or "Check system health")
-- **Example:**
+- **Example (default ensemble):**
   ```bash
-  curl -X POST http://localhost:8000/predict-scaling-smart-xgb \
+  curl -X POST http://localhost:8000/predict-scaling-smart \
+    -H "Content-Type: application/json" \
+    -d '{"history": [...]}'
+  ```
+- **Example (XGB only):**
+  ```bash
+  curl -X POST "http://localhost:8000/predict-scaling-smart?model=xgb" \
+    -H "Content-Type: application/json" \
+    -d '{"history": [...]}'
+  ```
+- **Example (GBR only):**
+  ```bash
+  curl -X POST "http://localhost:8000/predict-scaling-smart?model=gbr" \
     -H "Content-Type: application/json" \
     -d '{"history": [...]}'
   ```
